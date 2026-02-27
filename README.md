@@ -1,4 +1,6 @@
-[![Binder](https://binderhub.rc.nectar.org.au/badge_logo.svg)](https://binderhub.rc.nectar.org.au/v2/gh/git@github.com:Australian-Text-Analytics-Platform/notebook-ausreddit.git/HEAD)
+# AusReddit aggregated data - Notebook
+
+[![Binder](https://binderhub.rc.nectar.org.au/badge_logo.svg)](https://binderhub.rc.nectar.org.au/v2/gh/Australian-Text-Analytics-Platform/notebook-ausreddit/HEAD?labpath=exploration.ipynb)
 
 In this notebook (exploration.ipynb) you will be able to find ways of getting data about the QUT Digital Observatory's AusReddit collection. For more information on AusReddit go here - https://www.digitalobservatory.net.au/resources/ausreddit/
 
@@ -11,7 +13,7 @@ The notebook/s can access:
 + Emotions (NRC) for the entire collection
 + Topic Models (LDA) for the entire collection
 
-&#x1F6D1; Note: you cannot access AusReddit directly from this notebook - you need to contact the Digital Observatory if you want to get any reddit data from the collection.
+&#x1F6D1; Note: Using this notebook will download data from https://data.ldaca.edu.au portal's aggregated collection
 
 To run the notebook locally, run `uv run --with jupyter jupyter lab` in your terminal. 
 
