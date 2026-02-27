@@ -13,7 +13,7 @@ The notebook/s can access:
 + Emotions (NRC) for the entire collection
 + Topic Models (LDA) for the entire collection
 
-&#x1F6D1; Note: Using this notebook will download data from https://data.ldaca.edu.au portal's aggregated collection
+&#x1F6D1; Note:  Using this notebook will download pre-calculated aggregations from the LDaCA portal; you cannot access AusReddit directly from this notebook - you need to contact the Digital Observatory if you want to get any reddit data from the collection.
 
 To run the notebook locally, run `uv run --with jupyter jupyter lab` in your terminal. 
 
