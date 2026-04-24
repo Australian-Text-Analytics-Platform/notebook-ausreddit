@@ -5,13 +5,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import plotly.express as px
+import plotly.io as pio
 import requests
 from tqdm import tqdm
 
 class ExplorationAR:
     def __init__(self) -> None:
         pass
-
 
     def get_data(self, url, filename, force = False) -> str:
         cwd = os.getcwd()
@@ -38,20 +39,9 @@ class ExplorationAR:
 
         return filepath
 
-    def load_data(self, file_path: str) -> pd.DataFrame:
-        """
-        Load data from a CSV file.
-        """
-        try:
-            data = pd.read_csv(file_path)
-            return data
-        except Exception as e:
-            print(f"Error loading data: {e}")
-            return pd.DataFrame()
-
     # ngrams
 
-    def top_ngrams_in_date_range(self, data: pd.DataFrame, n: int, start_date: str, end_date: str) -> pd.DataFrame:
+    def top_ngrams_in_date_range(self, data_loc: str, n: int, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Get top n n-grams in a specified time frame by summing their counts.
         Assumes data has a 'month' column (YYYY-MM-01 format), 
@@ -59,36 +49,13 @@ class ExplorationAR:
         and a 'count' column (frequency of that ngram for the month).
         """
         try:
-            data_copy = data.copy() # Work on a copy to avoid SettingWithCopyWarning
-            # Ensure 'month' column is in datetime format
-            data_copy['month'] = pd.to_datetime(data_copy['month'])
-            
-            # Convert start_date and end_date strings to datetime objects for comparison
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-            
-            # Filter data based on the 'month' column and the provided date range
-            mask = (data_copy['month'] >= start_dt) & (data_copy['month'] <= end_dt)
-            filtered_data = data_copy[mask]
+            filtered_data = pd.read_parquet(data_loc, filters=(('month', '>=', start_date), ('month', '<=', end_date)))
 
-            if filtered_data.empty:
-                print(f"No data found in the date range {start_date} to {end_date}.")
-                return pd.DataFrame(columns=['ngram', 'total_count'])
+            gram_frequencies = filtered_data.groupby('ngram')['count'].sum()
 
-            if 'ngram' not in filtered_data.columns:
-                print("Error: 'ngram' column not found.")
-                return pd.DataFrame(columns=['ngram', 'total_count'])
-            if 'count' not in filtered_data.columns:
-                print("Error: 'count' column not found.")
-                return pd.DataFrame(columns=['ngram', 'total_count'])
+            top_ngrams_df = gram_frequencies.sort_values(ascending=False).head(n).reset_index()
 
-            # Group by 'ngram' and sum the 'count' for the filtered period
-            ngram_counts = filtered_data.groupby('ngram')['count'].sum()
-            
-            # Get the top N n-grams
-            top_n_ngrams = ngram_counts.nlargest(n).reset_index(name='total_count')
-            
-            return top_n_ngrams
+            return top_ngrams_df
         except KeyError as e:
             print(f"Error processing n-grams: Missing expected column {e}. Ensure 'month', 'ngram', and 'count' columns exist.")
             return pd.DataFrame()
@@ -96,7 +63,7 @@ class ExplorationAR:
             print(f"Error processing n-grams: {e}")
             return pd.DataFrame()
         
-    def keyword_search_in_date_range(self, data: pd.DataFrame, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def keyword_search_in_date_range(self, data_loc: str, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Search for a keyword (as a whole word, case-insensitive) within the 'ngram' column 
         in a specified time frame.
@@ -106,32 +73,11 @@ class ExplorationAR:
         Returns matching rows with 'month', 'ngram', and 'count'.
         """
         try:
-            data_copy = data.copy()
-            # Ensure 'month' column is in datetime format
-            data_copy['month'] = pd.to_datetime(data_copy['month'])
-            
-            # Convert start_date and end_date strings to datetime objects for comparison
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-            
-            # Filter data based on the 'month' column and the provided date range
-            date_mask = (data_copy['month'] >= start_dt) & (data_copy['month'] <= end_dt)
-            filtered_by_date = data_copy[date_mask]
-
-            if filtered_by_date.empty:
-                print(f"No data found in the date range {start_date} to {end_date}.")
-                return pd.DataFrame(columns=['month', 'ngram', 'count'])
-
-            if 'ngram' not in filtered_by_date.columns:
-                print("Error: 'ngram' column not found.")
-                return pd.DataFrame(columns=['month', 'ngram', 'count'])
-            if 'count' not in filtered_by_date.columns:
-                print("Error: 'count' column not found.")
-                return pd.DataFrame(columns=['month', 'ngram', 'count'])
+            filtered_data = pd.read_parquet(data_loc, filters=(('month', '>=', start_date), ('month', '<=', end_date)))
 
             # Search for the keyword within the 'ngram' column (whole word, case-insensitive)
             # Ensure 'ngram' is string type for .str accessor
-            keyword_data = filtered_by_date[filtered_by_date['ngram'].astype(str).str.contains(f'\\b{keyword}\\b', case=False, na=False, regex=True)]
+            keyword_data = filtered_data[filtered_data['ngram'].astype(str).str.contains(f'\\b{keyword}\\b', case=False, na=False, regex=True)]
 
             if keyword_data.empty:
                 print(f"Keyword '{keyword}' not found as a whole word in any n-gram within the specified date range.")
@@ -147,28 +93,14 @@ class ExplorationAR:
 
         #domains
         
-    def top_domains_in_date_range(self, data: pd.DataFrame, n: int, start_date: str, end_date: str) -> pd.DataFrame:
+    def top_domains_in_date_range(self, data_loc: str, n: int, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Get top domains in a specified time frame by summing their counts.
         Assumes data has a 'day' column for date, 'domain' column for domain strings,
         and a 'count' column for frequency.
         """
         try:
-            data_copy = data.copy()
-            # Ensure 'day' column is in datetime format
-            data_copy['day'] = pd.to_datetime(data_copy['day'])
-            
-            # Convert start_date and end_date strings to datetime objects for comparison
-            # Ensure they are timezone-naive if 'day' becomes timezone-naive after conversion, or match timezones.
-            start_dt = pd.to_datetime(start_date).tz_localize(None) # Assuming start/end_date are naive
-            end_dt = pd.to_datetime(end_date).tz_localize(None)   # Assuming start/end_date are naive
-            
-            # Make 'day' column timezone-naive for comparison if it's timezone-aware
-            if data_copy['day'].dt.tz is not None:
-                data_copy['day'] = data_copy['day'].dt.tz_localize(None)
-
-            mask = (data_copy['day'] >= start_dt) & (data_copy['day'] <= end_dt)
-            filtered_data = data_copy[mask]
+            filtered_data = pd.read_parquet(data_loc, filters=(('day', '>=', start_date), ('day', '<=', end_date)))
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -199,7 +131,7 @@ class ExplorationAR:
             print(f"Error processing domains: {e}")
             return pd.DataFrame()
 
-    def keyword_search_in_domains(self, data: pd.DataFrame, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def keyword_search_in_domains(self, data_loc: str, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Search for a keyword (case-insensitive) within extracted domains in a specified time frame.
         Assumes data has a 'day' column for date, 'domain' column for domain strings,
@@ -207,17 +139,7 @@ class ExplorationAR:
         Returns matching original rows with 'day', 'domain', and 'count'.
         """
         try:
-            data_copy = data.copy()
-            data_copy['day'] = pd.to_datetime(data_copy['day'])
-
-            start_dt = pd.to_datetime(start_date).tz_localize(None)
-            end_dt = pd.to_datetime(end_date).tz_localize(None)
-
-            if data_copy['day'].dt.tz is not None:
-                data_copy['day'] = data_copy['day'].dt.tz_localize(None)
-            
-            date_mask = (data_copy['day'] >= start_dt) & (data_copy['day'] <= end_dt)
-            filtered_by_date = data_copy[date_mask]
+            filtered_by_date = pd.read_parquet(data_loc, filters=(('day', '>=', start_date), ('day', '<=', end_date)))
 
             if filtered_by_date.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -251,7 +173,7 @@ class ExplorationAR:
             return pd.DataFrame()
 #emotions
 
-    def plot_emotion_trends(self, data: pd.DataFrame, start_date: str, end_date: str) -> None:
+    def plot_emotion_trends(self, data_loc: str, start_date: str, end_date: str) -> None:
         """
         Plot emotion trends over a specified time range.
         Assumes data has a 'date' column and columns for each emotion:
@@ -259,32 +181,9 @@ class ExplorationAR:
         The date range must be longer than three days.
         """
         try:
-            data_copy = data.copy()
-            
+            filtered_data = pd.read_parquet(data_loc, filters=(('date', '>=', start_date), ('date', '<=', end_date)))
+        
             emotion_columns = ["anger", "anticipation", "disgust", "fear", "joy", "sadness", "surprise", "trust"]
-            required_columns = ["date"] + emotion_columns
-
-            for col in required_columns:
-                if col not in data_copy.columns:
-                    print(f"Error: Missing required column '{col}'.")
-                    return
-
-            # Convert date columns and inputs to datetime objects
-            data_copy['date'] = pd.to_datetime(data_copy['date'])
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            if start_dt >= end_dt:
-                print("Error: Start date must be before end date.")
-                return
-
-            if (end_dt - start_dt).days <= 3:
-                print("Error: Date range must be longer than three days.")
-                return
-
-            # Filter data for the specified date range
-            mask = (data_copy['date'] >= start_dt) & (data_copy['date'] <= end_dt)
-            filtered_data = data_copy[mask]
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -316,7 +215,7 @@ class ExplorationAR:
         except Exception as e:
             print(f"Error plotting emotion trends: {e}")
 
-    def plot_emotion_highlights(self, data: pd.DataFrame, start_date: str, end_date: str) -> None:
+    def plot_emotion_highlights(self, data_loc: str, start_date: str, end_date: str) -> None:
         """
         Plot emotion trends, highlighting maximum and minimum non-zero values
         for each emotion over a specified time range.
@@ -324,30 +223,9 @@ class ExplorationAR:
         The date range must be longer than three days.
         """
         try:
-            data_copy = data.copy()
-            
+            filtered_data = pd.read_parquet(data_loc, filters=(('date', '>=', start_date), ('date', '<=', end_date)))
+
             emotion_columns = ["anger", "anticipation", "disgust", "fear", "joy", "sadness", "surprise", "trust"]
-            required_columns = ["date"] + emotion_columns
-
-            for col in required_columns:
-                if col not in data_copy.columns:
-                    print(f"Error: Missing required column '{col}'.")
-                    return
-
-            data_copy['date'] = pd.to_datetime(data_copy['date'])
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            if start_dt >= end_dt:
-                print("Error: Start date must be before end date.")
-                return
-
-            if (end_dt - start_dt).days <= 3:
-                print("Error: Date range must be longer than three days.")
-                return
-
-            mask = (data_copy['date'] >= start_dt) & (data_copy['date'] <= end_dt)
-            filtered_data = data_copy[mask].copy() # Use .copy() to avoid SettingWithCopyWarning on set_index
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -408,22 +286,14 @@ class ExplorationAR:
 
 # topics
 
-    def top_topics_per_day_in_date_range(self, data: pd.DataFrame, n: int, start_date: str, end_date: str) -> pd.DataFrame:
+    def top_topics_per_day_in_date_range(self, data_loc: str, n: int, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Get the top n topics for each date within a specified date range.
         Assumes data has 'date', 'topic_name', and 'doc_count' columns.
         Returns a DataFrame with columns: 'date', 'topic_name', 'doc_count'.
         """
         try:
-            data_copy = data.copy()
-            data_copy['date'] = pd.to_datetime(data_copy['date'])
-
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            # Filter data for the date range
-            mask = (data_copy['date'] >= start_dt) & (data_copy['date'] <= end_dt)
-            filtered_data = data_copy[mask]
+            filtered_data = pd.read_parquet(data_loc, filters=(('date', '>=', start_date), ('date', '<=', end_date)))
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -452,7 +322,7 @@ class ExplorationAR:
             print(f"Error processing topics: {e}")
             return pd.DataFrame()
         
-    def search_keyword_in_topics_by_date(self, data: pd.DataFrame, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def search_keyword_in_topics_by_date(self, data_loc: str, keyword: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Search for a keyword (case-insensitive, whole word) in the 'top_words' column and
         return topic clusters (by date) where that keyword occurred.
@@ -460,15 +330,7 @@ class ExplorationAR:
         Returns a DataFrame with columns: 'date', 'topic_name', 'top_words', 'doc_count'.
         """
         try:
-            data_copy = data.copy()
-            data_copy['date'] = pd.to_datetime(data_copy['date'])
-
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            # Filter by date range
-            mask = (data_copy['date'] >= start_dt) & (data_copy['date'] <= end_dt)
-            filtered_data = data_copy[mask]
+            filtered_data = pd.read_parquet(data_loc, filters=(('date', '>=', start_date), ('date', '<=', end_date)))
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
@@ -494,22 +356,15 @@ class ExplorationAR:
             print(f"Error searching for keyword in topics: {e}")
             return pd.DataFrame()
         
-    def top_subreddits_for_keyword_by_date(self, data: pd.DataFrame, keyword: str, n: int, start_date: str, end_date: str) -> pd.DataFrame:
+    def top_subreddits_for_keyword_by_date(self, data_loc: str, keyword: str, n: int, start_date: str, end_date: str) -> pd.DataFrame:
         """
         Return the top n subreddit_ids for a keyword search in 'top_words', sorted by date and doc_count.
         Assumes data has 'date', 'subreddit_id', 'top_words', and 'doc_count' columns.
         Returns a DataFrame with columns: 'date', 'subreddit_id', 'top_words', 'doc_count'.
         """
         try:
-            data_copy = data.copy()
-            data_copy['date'] = pd.to_datetime(data_copy['date'])
 
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            # Filter by date range
-            mask = (data_copy['date'] >= start_dt) & (data_copy['date'] <= end_dt)
-            filtered_data = data_copy[mask]
+            filtered_data = pd.read_parquet(data_loc, filters=(('date', '>=', start_date), ('date', '<=', end_date)))
 
             if filtered_data.empty:
                 print(f"No data found in the date range {start_date} to {end_date}.")
