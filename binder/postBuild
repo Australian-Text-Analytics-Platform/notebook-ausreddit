@@ -9,3 +9,27 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Verify
 uv --version
+
+# Get the data; postBuild runs *before* making the docker image so it will be baked in
+
+wget https://data.ldaca.edu.au/api/object/arcp%3A%2F%2Fname%2Chdl10.25912~RDF_1754373503052%2Ftopics_crate%2F.zip
+unzip -n 'arcp:%2F%2Fname,hdl10.25912~RDF_1754373503052%2Ftopics_crate%2F.zip'
+
+wget https://data.ldaca.edu.au/api/object/arcp%3A%2F%2Fname%2Chdl10.25912~RDF_1754373503052%2F1grams_crate%2F.zip
+unzip -n 'arcp:%2F%2Fname,hdl10.25912~RDF_1754373503052%2F1grams_crate%2F.zip'
+
+wget https://data.ldaca.edu.au/api/object/arcp%3A%2F%2Fname%2Chdl10.25912~RDF_1754373503052%2Fdomains_crate%2F.zip
+unzip -n 'arcp:%2F%2Fname,hdl10.25912~RDF_1754373503052%2Fdomains_crate%2F.zip'
+
+wget https://data.ldaca.edu.au/api/object/arcp%3A%2F%2Fname%2Chdl10.25912~RDF_1754373503052%2F3grams_crate%2F.zip
+unzip -n 'arcp:%2F%2Fname,hdl10.25912~RDF_1754373503052%2F3grams_crate%2F.zip'
+
+wget https://data.ldaca.edu.au/api/object/arcp%3A%2F%2Fname%2Chdl10.25912~RDF_1754373503052%2Femotions_crate%2F.zip
+unzip -n 'arcp:%2F%2Fname,hdl10.25912~RDF_1754373503052%2Femotions_crate%2F.zip'
+
+rm ro-crate-metadata.json
+rm ro-crate-preview.html
+rm */*.csv
+rm *.zip
+mv */*.parquet data
+rmdir 1grams_crate/ 3grams_crate/ emotions_crate/ topics_crate/ domains_crate/
